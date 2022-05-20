@@ -1,0 +1,2 @@
+* About
+These are shared helper functions for setting up dotfiles on OSX and Windows.
