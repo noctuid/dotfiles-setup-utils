@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 # Helper Utilities for OSX/WSL setup scripts
+# requirements:
+# - bash
+# - coreutils
+# for nix package installation
+# - nix
+# if run nix_package_setup to install these, they aren't needed beforehand:
+# - curl
+# - git
+# - gh
+# - svn
+# - yarn
+
 rdotfiles=https://raw.githubusercontent.com/noctuid/dotfiles/master
 svn_dotfiles=https://github.com/noctuid/dotfiles/trunk
 
@@ -14,19 +26,50 @@ _errm() {
 }
 
 # * Package Installation
+# ** Nix/Home Manager
+nix_setup() {
+	svn checkout "$svn_dotfiles"/nix ~/nix
+    # enable flakes and nix command
+	ln -sf ~/nix/.config/nix/nix.conf ~/.config/nix/nix.conf
+	nix-channel \
+		--add http://nixos.org/channels/nixpkgs-unstable nixpkgs
+	# TODO probably remove this since only using through home-manager flake
+	nix-channel \
+		--add https://github.com/nix-community/home-manager/archive/master.tar.gz \
+		home-manager
+	nix-channel --update
+}
+
+nix_package_setup() (
+	cd ~/nix || return 1
+	# impure is required to be able to use nixgl (might use on macOS)
+	config=darwinConfigurations.default.system
+	if [[ $(uname -s) =~ ^Linux ]]; then
+		config=homeConfigurations.wsl.activationPackages
+	else
+		whoami > ~/nix/darwin/username
+	fi
+	# TODO this will need root permissions on macOS; is manual sudo needed?
+	nix run "path:.#$config" --impure
+)
+
 # ** Yarn
 yarn_global_install() {
-	if ! hash yarn; then
-		_message "Installing yarn"
-		sudo npm install --global yarn
-	fi
+	# TODO verify this works through yarn then remove
+	# if ! hash yarn; then
+	# 	_message "Installing yarn"
+	# 	sudo npm install --global yarn
+	# fi
 	_message "Installing packages with yarn"
-	# TODO currently have to upgrade Ubuntu to get new enough node for this
-	sudo yarn global add pyright
-	sudo yarn global add typescript
-	sudo yarn global add typescript-language-server
+	# TODO verify these work through nix and then remove
+	# sudo yarn global add pyright
+	# sudo yarn global add typescript
+	# sudo yarn global add typescript-language-server
+	# TODO do I still need this?
 	sudo yarn global add indium
-	sudo yarn global add prettier
+
+	# should be installed for local project
+	# sudo yarn global add prettier
 }
 
 # ** Pipx
