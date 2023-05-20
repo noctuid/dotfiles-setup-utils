@@ -27,10 +27,35 @@ _errm() {
 
 # * Package Installation
 # ** Nix/Home Manager
-nix_setup() {
+nix_pull() {
+	lock=~/nix/flake.lock
+	if [[ -f $1 ]]; then
+		cp "$1" "$lock"
+	fi
+
+	tmp_lock=~/nix-tmp/flake.lock
+	if [[ -f $lock ]]; then
+		echo "Backup up existing flake.lock"
+		mkdir -p ~/nix-tmp
+		cp "$lock" "$tmp_lock"
+	fi
+
+	echo "Pulling nix config"
 	svn checkout "$svn_dotfiles"/nix ~/nix
     # enable flakes and nix command
+	mkdir -p ~/.config/nix
 	ln -sf ~/nix/.config/nix/nix.conf ~/.config/nix/nix.conf
+	if [[ $(uname -m) != arm64 ]]; then
+		sed -i "" 's/aarch64-darwin/x86_64-darwin/g' ~/nix/flake.nix
+	fi
+
+	if [[ -f $tmp_lock ]]; then
+		echo "Replacing pulled flake.lock with backed up version"
+		cp "$tmp_lock" "$lock"
+	fi
+}
+
+nix_channel_setup() {
 	nix-channel \
 		--add http://nixos.org/channels/nixpkgs-unstable nixpkgs
 	# TODO probably remove this since only using through home-manager flake
@@ -40,17 +65,36 @@ nix_setup() {
 	nix-channel --update
 }
 
-nix_package_setup() (
+nix_flake_update() (
 	cd ~/nix || return 1
-	# impure is required to be able to use nixgl (might use on macOS)
-	config=darwinConfigurations.default.system
+	nix flake update
+)
+
+nix_setup() (
+	cd ~/nix || return 1
 	if [[ $(uname -s) =~ ^Linux ]]; then
-		config=homeConfigurations.wsl.activationPackages
+		# --impure needed for nixGL
+		nix run "path:.#homeConfigurations.wsl.activationPackages" --impure \
+			--show-trace
 	else
-		whoami > ~/nix/darwin/username
+		whoami | tr -d '\n' > ~/nix/darwin/username
+		# --impure needed to look up <home-manager/nix-darwin>, for example
+		nix build "path:.#darwinConfigurations.default.system" --impure \
+			--show-trace
+		if ! grep --quiet 'run\tprivate/var/run' /etc/synthetic.conf; then
+			# macOS doesn't allow software to write to /, can put
+			# directories/symlinks in /etc/synthetic.conf instead
+			printf 'run\tprivate/var/run\n' | sudo tee -a /etc/synthetic.conf
+			# create now instead of on reboot
+			/System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -t
+		fi
+		./result/sw/bin/darwin-rebuild switch --flake .#default --impure \
+									   --show-trace
+		# if home-manager's useUserPackages is enabled
+		# source "/etc/profiles/per-user/$USER/etc/profile.d/hm-session-vars.sh"
+		# failed
+		# source "$HOME/.nix-profile/etc/profile.d/hm-session-vars.sh"
 	fi
-	# TODO this will need root permissions on macOS; is manual sudo needed?
-	nix run "path:.#$config" --impure
 )
 
 # ** Yarn
