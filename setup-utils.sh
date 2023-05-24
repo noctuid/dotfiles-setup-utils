@@ -27,6 +27,7 @@ _errm() {
 
 # * Package Installation
 # ** Nix/Home Manager
+# shellcheck disable=SC2120
 nix_pull() {
 	lock=~/nix/flake.lock
 	if [[ -f $1 ]]; then
@@ -35,12 +36,12 @@ nix_pull() {
 
 	tmp_lock=~/nix-tmp/flake.lock
 	if [[ -f $lock ]]; then
-		echo "Backup up existing flake.lock"
+	    _message "Backup up existing flake.lock"
 		mkdir -p ~/nix-tmp
 		cp "$lock" "$tmp_lock"
 	fi
 
-	echo "Pulling nix config"
+	_message "Downloading latest nix config"
 	svn checkout "$svn_dotfiles"/nix ~/nix
     # enable flakes and nix command
 	mkdir -p ~/.config/nix
@@ -50,7 +51,7 @@ nix_pull() {
 	fi
 
 	if [[ -f $tmp_lock ]]; then
-		echo "Replacing pulled flake.lock with backed up version"
+		_message "Replacing pulled flake.lock with backed up version"
 		cp "$tmp_lock" "$lock"
 	fi
 }
@@ -120,10 +121,11 @@ yarn_global_install() {
 # does not currently need to be shared
 
 # * Emacs Setup
-emacs_setup() (
-	_message "Setting up Emacs with latest configuration."
+emacs_pull() (
+	_message "Downloading latest Emacs config files"
 
 	# useful here (but see http://mywiki.wooledge.org/BashFAQ/105)
+	# (not so much now that justpulling)
 	set -e
 
 	mkdir -p ~/.emacs.d/lisp ~/.emacs.d/straight/versions
@@ -146,20 +148,41 @@ emacs_setup() (
 )
 
 # * Shell Setup
-shell_config_setup() {
-	_message "Downloading shell config files"
+shell_pull() {
+	_message "Downloading latest shell config files"
 	curl "$rdotfiles"/terminal/.zshrc > ~/.zshrc
-	mkdir -p ~/.config/{kitty,tmux}
+	mkdir -p ~/.config/{kitty,tmux,wezterm}
 	curl "$rdotfiles"/terminal/.config/tmux/tmux.conf > ~/.config/tmux/tmux.conf
 	curl "$rdotfiles"/terminal/.config/kitty/kitty.conf \
 		 > ~/.config/kitty/kitty.conf
+	curl "$rdotfiles"/terminal/.config/wezterm/wezterm.lua \
+		 > ~/.config/wezterm/wezterm.lua
+}
+
+# * Browser Setup
+# NOTE this is only going to be cross platform if running browser through WSL
+# don't include quickmarks; use own;maybe split into generic and nont
+browser_pull() {
+	target=~/.config/tridactyl
+	mkdir -p "$target"
+	_message "Downloading latest tridactyl config files"
+	svn checkout "$svn_dotfiles"/browsing/.config/tridactyl "$target"
+	# remove unneeded searchengines/quickmarks
+	rm -f "$target"/other*
+}
+
+# * Pywal Setup
+pywal_pull() {
+	mkdir -p ~/.config/wal
+	_message "Downloading latest pywal config files"
+	svn checkout "$svn_dotfiles"/aesthetics/.config/wal ~/.config/wal
 }
 
 # * Git
 # ** Git Config Setup
 gitconfig_setup() {
 	if [[ ! -f ~/.gitconfig ]] || ! grep --quiet email ~/.gitconfig; then
-		echo "Enter the email address to normally use for git:"
+		_message "Enter the email address to normally use for git:"
 		read -r email
 		echo "[user]
 	name = Fox Kiester
@@ -188,7 +211,7 @@ gitconfig_setup() {
 	fi
 
 	if [[ ! -f ~/.gitconfig-personal ]]; then
-		echo "Enter the email address to use for committing the dotfiles repo:"
+		_message "Enter the email address to use for committing the dotfiles repo:"
 		read -r email
 		echo "[user]
 	email = $email
@@ -202,4 +225,13 @@ github_auth_setup() {
 	if gh auth status 2>&1 | grep --quiet "not logged in" 2> /dev/null; then
 		gh auth login || _errm "Failed to set up github access token."
 	fi
+}
+
+# * Pull All Config
+all_config_pull() {
+	nix_pull
+	emacs_pull
+	shell_pull
+	browser_pull
+	pywal_pull
 }
