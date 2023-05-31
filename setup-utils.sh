@@ -227,6 +227,15 @@ github_auth_setup() {
 	fi
 }
 
+# * Python Setup
+python_pull() {
+	mkdir -p ~/.config/{pypoetry,ruff}
+	curl "$rdotfiles"/common/.config/pypoetry/config.toml \
+		 > ~/.config/pypoetry/config.toml
+	curl "$rdotfiles"/common/.config/ruff/ruff.toml \
+		 > ~/.config/ruff/ruff.toml
+}
+
 # * Pull All Config
 all_config_pull() {
 	nix_pull
@@ -234,4 +243,5 @@ all_config_pull() {
 	shell_pull
 	browser_pull
 	pywal_pull
+	python_pull
 }
