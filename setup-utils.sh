@@ -3,13 +3,13 @@
 # requirements:
 # - bash
 # - coreutils
+# - svn
 # for nix package installation
 # - nix
 # if run nix_package_setup to install these, they aren't needed beforehand:
 # - curl
 # - git
 # - gh
-# - svn
 # - yarn
 
 rdotfiles=https://raw.githubusercontent.com/noctuid/dotfiles/master
@@ -46,7 +46,8 @@ nix_pull() {
     # enable flakes and nix command
 	mkdir -p ~/.config/nix
 	ln -sf ~/nix/.config/nix/nix.conf ~/.config/nix/nix.conf
-	if [[ $(uname -m) != arm64 ]]; then
+	if [[ ! $(uname -s) =~ ^Linux ]] && [[ $(uname -m) != arm64 ]]; then
+		# this sed syntax is not gnu sed
 		sed -i "" 's/aarch64-darwin/x86_64-darwin/g' ~/nix/flake.nix
 	fi
 
@@ -57,6 +58,7 @@ nix_pull() {
 }
 
 nix_channel_setup() {
+	_message "Updating nix channels"
 	nix-channel \
 		--add http://nixos.org/channels/nixpkgs-unstable nixpkgs
 	# TODO probably remove this since only using through home-manager flake
@@ -67,15 +69,17 @@ nix_channel_setup() {
 }
 
 nix_flake_update() (
+	_message "Updating nix flake"
 	cd ~/nix || return 1
 	nix flake update
 )
 
 nix_setup() (
+	_message "Installing nix packages and performing home-manager setup"
 	cd ~/nix || return 1
 	if [[ $(uname -s) =~ ^Linux ]]; then
 		# --impure needed for nixGL
-		nix run "path:.#homeConfigurations.wsl.activationPackages" --impure \
+		nix run "path:.#homeConfigurations.wsl.activationPackage" --impure \
 			--show-trace
 	else
 		whoami | tr -d '\n' > ~/nix/darwin/username
@@ -163,6 +167,7 @@ shell_pull() {
 # NOTE this is only going to be cross platform if running browser through WSL
 # don't include quickmarks; use own;maybe split into generic and nont
 browser_pull() {
+	_message "Downloading latest tridactyl/browser config files"
 	target=~/.config/tridactyl
 	mkdir -p "$target"
 	_message "Downloading latest tridactyl config files"
@@ -173,6 +178,7 @@ browser_pull() {
 
 # * Pywal Setup
 pywal_pull() {
+	_message "Downloading latest pywal config files"
 	mkdir -p ~/.config/wal
 	_message "Downloading latest pywal config files"
 	svn checkout "$svn_dotfiles"/aesthetics/.config/wal ~/.config/wal
@@ -222,6 +228,7 @@ gitconfig_setup() {
 # ** Github Setup
 # to be able to push this repo
 github_auth_setup() {
+	_message "Setting up github authentication"
 	if gh auth status 2>&1 | grep --quiet "not logged in" 2> /dev/null; then
 		gh auth login || _errm "Failed to set up github access token."
 	fi
@@ -229,6 +236,7 @@ github_auth_setup() {
 
 # * Python Setup
 python_pull() {
+	_message "Downloading python config files"
 	mkdir -p ~/.config/{pypoetry,ruff}
 	curl "$rdotfiles"/common/.config/pypoetry/config.toml \
 		 > ~/.config/pypoetry/config.toml
