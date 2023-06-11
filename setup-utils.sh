@@ -71,7 +71,11 @@ nix_channel_setup() {
 nix_flake_update() (
 	_message "Updating nix flake"
 	cd ~/nix || return 1
-	nix flake update
+	if [[ -n $1 ]]; then
+		nix flake lock --update-input "$1"
+	else
+		nix flake update
+	fi
 )
 
 nix_darwin_switch() {
