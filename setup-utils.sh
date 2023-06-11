@@ -74,6 +74,12 @@ nix_flake_update() (
 	nix flake update
 )
 
+nix_darwin_switch() {
+	cd ~/nix || return 1
+	./result/sw/bin/darwin-rebuild switch --flake .#default --impure \
+								   --show-trace
+}
+
 nix_setup() (
 	_message "Installing nix packages and performing home-manager setup"
 	cd ~/nix || return 1
@@ -85,7 +91,7 @@ nix_setup() (
 		whoami | tr -d '\n' > ~/nix/darwin/username
 		# --impure needed to look up <home-manager/nix-darwin>, for example
 		nix build "path:.#darwinConfigurations.default.system" --impure \
-			--show-trace
+			--show-trace || return 1
 		if ! grep --quiet 'run\tprivate/var/run' /etc/synthetic.conf; then
 			# macOS doesn't allow software to write to /, can put
 			# directories/symlinks in /etc/synthetic.conf instead
@@ -93,8 +99,7 @@ nix_setup() (
 			# create now instead of on reboot
 			/System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -t
 		fi
-		./result/sw/bin/darwin-rebuild switch --flake .#default --impure \
-									   --show-trace
+		nix_darwin_switch
 		# if home-manager's useUserPackages is enabled
 		# source "/etc/profiles/per-user/$USER/etc/profile.d/hm-session-vars.sh"
 		# failed
