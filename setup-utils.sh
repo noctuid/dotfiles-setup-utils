@@ -25,6 +25,10 @@ _errm() {
 	echo "setup.sh: $*" >&2
 }
 
+_is_linux() {
+	[[ $(uname -s) =~ ^Linux ]]
+}
+
 # * Package Installation
 # ** Nix/Home Manager
 # shellcheck disable=SC2120
@@ -87,7 +91,7 @@ nix_darwin_switch() {
 nix_setup() (
 	_message "Installing nix packages and performing home-manager setup"
 	cd ~/nix || return 1
-	if [[ $(uname -s) =~ ^Linux ]]; then
+	if _is_linux; then
 		# --impure needed for nixGL
 		nix run "path:.#homeConfigurations.wsl.activationPackage" --impure \
 			--show-trace
@@ -262,11 +266,20 @@ github_auth_setup() (
 # * Python Setup
 python_pull() {
 	_message "Downloading python config files"
-	mkdir -p ~/.config/{pypoetry,ruff}
-	curl "$rdotfiles"/common/.config/pypoetry/config.toml \
-		 > ~/.config/pypoetry/config.toml
-	curl "$rdotfiles"/common/.config/ruff/ruff.toml \
-		 > ~/.config/ruff/ruff.toml
+	if _is_linux; then
+		mkdir -p ~/.config/{pypoetry,ruff}
+		curl "$rdotfiles"/common/.config/pypoetry/config.toml \
+			 > ~/.config/pypoetry/config.toml
+		curl "$rdotfiles"/common/.config/ruff/ruff.toml \
+			 > ~/.config/ruff/ruff.toml
+	else
+		mkdir -p ~/Library/Preferences/pypoetry
+		curl "$rdotfiles"/common/.config/pypoetry/config.toml \
+			 > ~/Library/Preferences/pypoetry/config.toml
+		mkdir -p ~/"Library/Application Support/ruff"
+		curl "$rdotfiles"/common/.config/ruff/ruff.toml \
+			 > ~/"Library/Application Support/ruff/ruff.toml"
+	fi
 }
 
 # * Pull All Config
