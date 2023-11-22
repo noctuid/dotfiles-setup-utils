@@ -32,7 +32,7 @@ _is_linux() {
 # * Package Installation
 # ** Nix/Home Manager
 # shellcheck disable=SC2120
-nix_pull() {
+nix_pull() {  # <optional lock file to use instead of stored one>
 	lock=~/nix/flake.lock
 	if [[ -f $1 ]]; then
 		cp "$1" "$lock"
@@ -50,13 +50,24 @@ nix_pull() {
     # enable flakes and nix command
 	mkdir -p ~/.config/nix
 	ln -sf ~/nix/.config/nix/nix.conf ~/.config/nix/nix.conf
-	if [[ ! $(uname -s) =~ ^Linux ]] && [[ $(uname -m) != arm64 ]]; then
-		# this sed syntax is not gnu sed
-		sed -i "" 's/aarch64-darwin/x86_64-darwin/g' ~/nix/flake.nix
+	if ! _is_linux; then
+		# TODO add function to remove zscaler cert in case zscaler stops working
+		zscaler_cert="$HOME/Documents/zscaler.pem"
+		if [[ -f $zscaler_cert ]] \
+		   && ! grep --quiet "ssl-cert-file" ~/.config/nix/nix.conf; then
+			_message "Configuring nix to work with Zscaler cert"
+			echo "ssl-cert-file = $zscaler_cert" >> ~/.config/nix/nix.conf
+
+		fi
+		if [[ $(uname -m) != arm64 ]]; then
+			# this sed syntax is not gnu sed
+			sed -i "" 's/aarch64-darwin/x86_64-darwin/g' ~/nix/flake.nix
+		fi
 	fi
 
 	if [[ -f $tmp_lock ]]; then
-		_message "Replacing pulled flake.lock with backed up version"
+		_message "Replacing pulled flake.lock (which is inevitably out-of-date
+for this machine) with backed up version"
 		cp "$tmp_lock" "$lock"
 	fi
 }
@@ -116,19 +127,23 @@ nix_setup() (
 )
 
 # ** Yarn
+# TODO probably remove
 yarn_global_install() {
 	# TODO verify this works through yarn then remove
 	# if ! hash yarn; then
 	# 	_message "Installing yarn"
 	# 	sudo npm install --global yarn
 	# fi
-	_message "Installing packages with yarn"
-	# TODO verify these work through nix and then remove
+	_message "Installing packages with yarn (currently none)"
+	# don't use yarn global for these
 	# sudo yarn global add pyright
 	# sudo yarn global add typescript
 	# sudo yarn global add typescript-language-server
 	# TODO do I still need this?
-	sudo yarn global add indium
+	# sudo yarn global add indium
+
+	# needs to be installed through same node version using with nvm
+	# npm install -g typescript @angular/language-server @angular/language-service
 
 	# should be installed for local project
 	# sudo yarn global add prettier
@@ -193,12 +208,14 @@ browser_pull() {
 pywal_pull() {
 	_message "Downloading latest pywal config files"
 	mkdir -p ~/.config/wal
-	_message "Downloading latest pywal config files"
 	svn checkout "$svn_dotfiles"/aesthetics/.config/wal ~/.config/wal
 }
 
 # * Git
 # ** Git Config Setup
+# TODO optionally add
+# [http]
+# sslCAInfo = ...zscaler cert full path
 gitconfig_setup() {
 	if [[ ! -f ~/.gitconfig ]] || ! grep --quiet email ~/.gitconfig; then
 		_message "Enter the email address to normally use for git:"
@@ -267,19 +284,15 @@ github_auth_setup() (
 python_pull() {
 	_message "Downloading python config files"
 	if _is_linux; then
-		mkdir -p ~/.config/{pypoetry,ruff}
-		curl "$rdotfiles"/common/.config/pypoetry/config.toml \
-			 > ~/.config/pypoetry/config.toml
-		curl "$rdotfiles"/common/.config/ruff/ruff.toml \
-			 > ~/.config/ruff/ruff.toml
+		conf_dir=~/.config
 	else
-		mkdir -p ~/Library/Preferences/pypoetry
-		curl "$rdotfiles"/common/.config/pypoetry/config.toml \
-			 > ~/Library/Preferences/pypoetry/config.toml
-		mkdir -p ~/"Library/Application Support/ruff"
-		curl "$rdotfiles"/common/.config/ruff/ruff.toml \
-			 > ~/"Library/Application Support/ruff/ruff.toml"
+		conf_dir=~/"Library/Application Support"
 	fi
+	mkdir -p "$conf_dir"/{pypoetry,ruff}
+	curl "$rdotfiles"/common/.config/pypoetry/config.toml \
+			> "$conf_dir"/pypoetry/config.toml
+	curl "$rdotfiles"/common/.config/ruff/ruff.toml \
+			> "$conf_dir"/ruff/ruff.toml
 }
 
 # * Pull All Config
