@@ -14,6 +14,7 @@
 
 rdotfiles=https://raw.githubusercontent.com/noctuid/dotfiles/master
 svn_dotfiles=https://github.com/noctuid/dotfiles/trunk
+USE_NIX=${USE_NIX:-false}
 
 _message() {
 	echo
@@ -273,12 +274,22 @@ python_pull() {
 			> "$conf_dir"/ruff/ruff.toml
 }
 
+# * Direnv Setup
+direnv_pull() {
+	mkdir -p ~/.config/direnv
+	curl "$rdotfiles"/common/.config/direnv/direnv.toml \
+		 > ~/.config/direnv/direnv.toml
+}
+
 # * Pull All Config
 all_config_pull() {
-	nix_pull
+	if $USE_NIX; then
+		nix_pull
+	fi
 	emacs_pull
 	shell_pull
 	browser_pull
 	pywal_pull
 	python_pull
+	direnv_pull
 }
