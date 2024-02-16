@@ -236,6 +236,9 @@ gitconfig_setup() {
 	path = .gitconfig-personal
 [includeIf \"gitdir:~/windots/**\"]
 	path = .gitconfig-personal
+
+# [http]
+# 	sslCAInfo = ~/Documents/zscaler.pem
 " >> ~/.gitconfig
 	fi
 
@@ -254,31 +257,6 @@ gitconfig_setup() {
 " >> ~/.gitconfig-personal
 	fi
 }
-
-# ** Github Setup
-gh_setup_profile() {
-	if ! gh profile list | grep --quiet "$1"; then
-		gh profile create "$1"
-		_message "Setting up $1 profile github authentication"
-		_message "Private repos will not work even with full permisisons"
-		if gh auth status 2>&1 | grep --quiet "not logged in" 2> /dev/null; then
-			# gh profile only supports --insecure-storage currently
-			gh auth login --insecure-storage \
-				|| _errm "Failed to set up github access token."
-		fi
-	fi
-}
-
-github_auth_setup() (
-	gh extension install gabe565/gh-profile 2> /dev/null
-	# to be able to push this repo
-	gh_setup_profile noctuid
-	gh_setup_profile work
-	if [[ -n $1 ]]; then
-		cd "$1" || return 1
-		gh profile switch --local-dir noctuid
-	fi
-)
 
 # * Python Setup
 python_pull() {
