@@ -4,6 +4,7 @@
 # - bash
 # - coreutils
 # - svn
+# - cargo (for cargo_install)
 # for nix package installation
 # - nix
 # if run nix_package_setup to install these, they aren't needed beforehand:
@@ -152,6 +153,12 @@ yarn_global_install() {
 
 # ** Pipx
 # does not currently need to be shared
+
+# ** Cargo
+cargo_install() {
+	cargo install pyenv-python
+	ln -sf ~/.cargo/bin/python ~/.cargo/bin/python3
+}
 
 # * Emacs Setup
 emacs_pull() (
