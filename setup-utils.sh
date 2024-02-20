@@ -3,18 +3,16 @@
 # requirements:
 # - bash
 # - coreutils
-# - svn
 # - cargo (for cargo_install)
+# - curl
+# - jq
 # for nix package installation
 # - nix
-# if run nix_package_setup to install these, they aren't needed beforehand:
-# - curl
+# but if run nix install function to install these, they aren't needed beforehand:
 # - git
-# - gh
 # - yarn
 
 rdotfiles=https://raw.githubusercontent.com/noctuid/dotfiles/master
-svn_dotfiles=https://github.com/noctuid/dotfiles/trunk
 USE_NIX=${USE_NIX:-false}
 
 _message() {
@@ -29,6 +27,51 @@ _errm() {
 
 _is_linux() {
 	[[ $(uname -s) =~ ^Linux ]]
+}
+
+_take() {
+	mkdir -p "$1" && cd "$1"
+}
+
+_curl() {
+	# curl --silent "$@"
+	curl --progress-bar "$@"
+
+}
+
+_download_github_dir() (
+	if ! hash jq 2> /dev/null; then
+		_errm "Jq must be installed to download github directory"
+	fi
+
+	local repo path destdir item
+	repo=$1
+	path=$2
+	destdir=$3
+	_take "$destdir" || return 1
+	_curl "https://api.github.com/repos/$repo/contents/$path" \
+		| jq --compact-output '.[]' | while read -r item; do
+		local file_type name
+		file_type=$(echo "$item" | jq --raw-output '.type')
+		name=$(echo "$item" | jq --raw-output '.name')
+		case $file_type in
+			file)
+				local download_url
+				download_url=$(echo "$item" | jq --raw-output '.download_url')
+				echo "Downloading $name to $PWD"
+				_curl "$download_url" > "$name" 2> /dev/null
+				;;
+			dir)
+				local new_repo_path
+				new_repo_path=$(echo "$item" | jq --raw-output '.path')
+				_download_github_dir "$repo" "$new_repo_path" "$name"
+				;;
+		esac
+	done
+)
+
+_download_dotfiles_dir() {  # <path> <dest>
+	_download_github_dir noctuid/dotfiles "$1" "$2"
 }
 
 # * Package Installation
@@ -48,7 +91,7 @@ nix_pull() {  # <optional lock file to use instead of stored one>
 	fi
 
 	_message "Downloading latest nix config"
-	svn checkout "$svn_dotfiles"/nix ~/nix
+	_download_dotfiles_dir nix ~/nix
     # enable flakes and nix command
 	mkdir -p ~/.config/nix
 	ln -sf ~/nix/.config/nix/nix.conf ~/.config/nix/nix.conf
@@ -157,45 +200,25 @@ yarn_global_install() {
 # ** Cargo
 cargo_install() {
 	cargo install pyenv-python
-	ln -sf ~/.cargo/bin/python ~/.cargo/bin/python3
+	ln -s ~/.cargo/bin/python ~/.cargo/bin/python3
+	cargo install taplo
 }
 
 # * Emacs Setup
-emacs_pull() (
+emacs_pull() {
 	_message "Downloading latest Emacs config files"
-
-	# useful here (but see http://mywiki.wooledge.org/BashFAQ/105)
-	# (not so much now that justpulling)
-	set -e
-
-	mkdir -p ~/.emacs.d/lisp ~/.emacs.d/straight/versions
-	curl "$rdotfiles"/emacs/.emacs.d/early-init.el > ~/.emacs.d/early-init.el
-	curl "$rdotfiles"/emacs/.emacs.d/init.el > ~/.emacs.d/init.el
-	curl "$rdotfiles"/emacs/.emacs.d/awaken.org > ~/.emacs.d/awaken.org
-	curl "$rdotfiles"/emacs/.emacs.d/lisp/noct-util.el \
-		 > ~/.emacs.d/lisp/noct-util.el
-	curl "$rdotfiles"/emacs/.emacs.d/straight/versions/default.el \
-		 > ~/.emacs.d/straight/versions/default.el
-
-	mkdir -p ~/.emacs.d/yasnippet/{snippets,templates}
-	# github doesn't support git-archive
-	# however, it will convert to svn repo in backend
-	# this can be used to get a specific folder
-	svn checkout "$svn_dotfiles"/emacs/.emacs.d/etc/yasnippet/snippets \
-		~/.emacs.d/yasnippet/snippets
-	svn checkout "$svn_dotfiles"/emacs/.emacs.d/etc/yasnippet/templates \
-		~/.emacs.d/yasnippet/templates
-)
+	_download_dotfiles_dir emacs/.emacs.d ~/.emacs.d
+}
 
 # * Shell Setup
 shell_pull() {
 	_message "Downloading latest shell config files"
-	curl "$rdotfiles"/terminal/.zshrc > ~/.zshrc
+	_curl "$rdotfiles"/terminal/.zshrc > ~/.zshrc
 	mkdir -p ~/.config/{kitty,tmux,wezterm}
-	curl "$rdotfiles"/terminal/.config/tmux/tmux.conf > ~/.config/tmux/tmux.conf
-	curl "$rdotfiles"/terminal/.config/kitty/kitty.conf \
+	_curl "$rdotfiles"/terminal/.config/tmux/tmux.conf > ~/.config/tmux/tmux.conf
+	_curl "$rdotfiles"/terminal/.config/kitty/kitty.conf \
 		 > ~/.config/kitty/kitty.conf
-	curl "$rdotfiles"/terminal/.config/wezterm/wezterm.lua \
+	_curl "$rdotfiles"/terminal/.config/wezterm/wezterm.lua \
 		 > ~/.config/wezterm/wezterm.lua
 }
 
@@ -205,9 +228,8 @@ shell_pull() {
 browser_pull() {
 	_message "Downloading latest tridactyl/browser config files"
 	target=~/.config/tridactyl
-	mkdir -p "$target"
 	_message "Downloading latest tridactyl config files"
-	svn checkout "$svn_dotfiles"/browsing/.config/tridactyl "$target"
+	_download_dotfiles_dir browsing/.config/tridactyl "$target"
 	# remove unneeded searchengines/quickmarks
 	rm -f "$target"/other*
 }
@@ -215,8 +237,7 @@ browser_pull() {
 # * Pywal Setup
 pywal_pull() {
 	_message "Downloading latest pywal config files"
-	mkdir -p ~/.config/wal
-	svn checkout "$svn_dotfiles"/aesthetics/.config/wal ~/.config/wal
+	_download_dotfiles_dir aesthetics/.config/wal ~/.config/wal
 }
 
 # * Git
@@ -275,16 +296,16 @@ python_pull() {
 		conf_dir=~/"Library/Application Support"
 	fi
 	mkdir -p "$conf_dir"/{pypoetry,ruff}
-	curl "$rdotfiles"/common/.config/pypoetry/config.toml \
+	_curl "$rdotfiles"/common/.config/pypoetry/config.toml \
 			> "$conf_dir"/pypoetry/config.toml
-	curl "$rdotfiles"/common/.config/ruff/ruff.toml \
+	_curl "$rdotfiles"/common/.config/ruff/ruff.toml \
 			> "$conf_dir"/ruff/ruff.toml
 }
 
 # * Direnv Setup
 direnv_pull() {
 	mkdir -p ~/.config/direnv
-	curl "$rdotfiles"/common/.config/direnv/direnv.toml \
+	_curl "$rdotfiles"/common/.config/direnv/direnv.toml \
 		 > ~/.config/direnv/direnv.toml
 }
 
